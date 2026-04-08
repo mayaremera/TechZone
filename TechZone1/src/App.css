@@ -1,0 +1,12 @@
+.heading-font {
+  /* font-family: 'Poppins', Montserrat, sans-serif; */
+  font-family: "Roboto", sans-serif;
+  font-weight:  600;
+}
+
+/* .body-font {
+    font-family: Inter, Roboto, sans-serif;
+} */
+.body-font {
+            font-family: Roboto, sans-serif;
+}
