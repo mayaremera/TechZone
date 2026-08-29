@@ -149,7 +149,7 @@ export default function Footer() {
 
       {/* Bottom */}
       <div className="border-t border-white/20 mt-6 pt-4 text-center text-xs sm:text-sm md:text-md text-gray-300">
-        Youssef & Mayar © 2024. Design by Besmeallahe Masha2allah Team
+        Youssef & Mayar © 2024. Design by Meh Team
       </div>
     </footer>
   );

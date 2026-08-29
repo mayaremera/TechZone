@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_URL } from "../../config";
 
 export default function HomeGridProductsSection() {
   const navigate = useNavigate();
@@ -11,7 +12,7 @@ export default function HomeGridProductsSection() {
   });
 
   useEffect(() => {
-    fetch("http://localhost:8080/products")
+    fetch(`${API_URL}/products`)
       .then(response => response.json())
       .then(data => {
         // Shuffle array

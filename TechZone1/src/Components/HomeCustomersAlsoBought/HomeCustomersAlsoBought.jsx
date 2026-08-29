@@ -4,8 +4,8 @@ import { Heart, ShoppingCart, Check } from "lucide-react";
 import { useCart } from "../../Components/CartContext/CartContext";
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
+import { API_URL } from "../../config";
 
-const API_URL = "http://localhost:8080";
 const FALLBACK_IMAGE =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(

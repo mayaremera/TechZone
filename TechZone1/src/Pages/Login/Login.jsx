@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation, useParams } from "react-router-dom";
 import { FcGoogle } from "react-icons/fc";
 import { useAuth } from "../../Pages/AuthContextYoussef/AuthContextYoussef";
+import { API_URL } from "../../config";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -78,7 +79,7 @@ const Auth = () => {
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = "http://localhost:8080/google_login"; // Redirect to Flask OAuth endpoint
+    window.location.href = `${API_URL}/google_login`; // Redirect to Flask OAuth endpoint
   };
 
   if (authLoading) {

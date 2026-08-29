@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { API_URL } from "../../config";
 
 const VerifyEmail = () => {
     const { token } = useParams();
@@ -11,7 +12,7 @@ const VerifyEmail = () => {
     useEffect(() => {
         const verifyEmail = async () => {
             try {
-                const response = await fetch(`http://localhost:8080/verify_email/${token}`, {
+                const response = await fetch(`${API_URL}/verify_email/${token}`, {
                     method: 'GET',
                 });
                 const data = await response.json();

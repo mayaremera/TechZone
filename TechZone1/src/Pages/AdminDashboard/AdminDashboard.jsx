@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
+import { API_URL } from "../../config";
+import { getAuthToken } from "../../authToken";
 
 export default function AdminDashboard() {
-  const { getAccessTokenSilently } = useAuth0();
+  const { getAccessTokenSilently, getIdTokenClaims } = useAuth0();
+  const getToken = () => getAuthToken({ getIdTokenClaims, getAccessTokenSilently });
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -23,21 +26,21 @@ export default function AdminDashboard() {
 
   const fetchAdminData = async () => {
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getToken();
       const [statsRes, usersRes, ordersRes, productsRes, categoriesRes] = await Promise.all([
-        fetch("http://localhost:8080/admin/dashboard", {
+        fetch(`${API_URL}/admin/dashboard`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch("http://localhost:8080/admin/users", {
+        fetch(`${API_URL}/admin/users`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch("http://localhost:8080/admin/orders", {
+        fetch(`${API_URL}/admin/orders`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch("http://localhost:8080/admin/products", {
+        fetch(`${API_URL}/admin/products`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch("http://localhost:8080/admin/categories", {
+        fetch(`${API_URL}/admin/categories`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -66,8 +69,8 @@ export default function AdminDashboard() {
 
   const handleRoleChange = async (userId, newRole) => {
     try {
-      const token = await getAccessTokenSilently();
-      const response = await fetch(`http://localhost:8080/admin/users/${userId}/role`, {
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/admin/users/${userId}/role`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -88,7 +91,7 @@ export default function AdminDashboard() {
   const handleAddProduct = async (e) => {
     e.preventDefault();
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getToken();
       const productData = {
         name: newProduct.name,
         price: parseFloat(newProduct.price),
@@ -98,7 +101,7 @@ export default function AdminDashboard() {
         images: newProduct.images, // Array of image URLs
       };
 
-      const response = await fetch("http://localhost:8080/admin/products", {
+      const response = await fetch(`${API_URL}/admin/products`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -118,7 +121,7 @@ export default function AdminDashboard() {
   const handleUpdateProduct = async (e) => {
     e.preventDefault();
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getToken();
       const productData = {
         name: editingProduct.name,
         price: parseFloat(editingProduct.price),
@@ -128,7 +131,7 @@ export default function AdminDashboard() {
         images: editingProduct.newImages.length > 0 ? editingProduct.newImages : editingProduct.images,
       };
 
-      const response = await fetch(`http://localhost:8080/admin/products/${editingProduct.product_id}`, {
+      const response = await fetch(`${API_URL}/admin/products/${editingProduct.product_id}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -147,8 +150,8 @@ export default function AdminDashboard() {
 
   const handleDeleteProduct = async (productId) => {
     try {
-      const token = await getAccessTokenSilently();
-      const response = await fetch(`http://localhost:8080/admin/products/${productId}`, {
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/admin/products/${productId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -162,8 +165,8 @@ export default function AdminDashboard() {
   const handleAddCategory = async (e) => {
     e.preventDefault();
     try {
-      const token = await getAccessTokenSilently();
-      const response = await fetch("http://localhost:8080/admin/categories", {
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/admin/categories`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -183,8 +186,8 @@ export default function AdminDashboard() {
   const handleUpdateCategory = async (e) => {
     e.preventDefault();
     try {
-      const token = await getAccessTokenSilently();
-      const response = await fetch(`http://localhost:8080/admin/categories/${editingCategory.category_id}`, {
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/admin/categories/${editingCategory.category_id}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -202,8 +205,8 @@ export default function AdminDashboard() {
 
   const handleDeleteCategory = async (categoryId) => {
     try {
-      const token = await getAccessTokenSilently();
-      const response = await fetch(`http://localhost:8080/admin/categories/${categoryId}`, {
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/admin/categories/${categoryId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -217,7 +220,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!error) fetchAdminData();
-  }, [getAccessTokenSilently, error]);
+  }, [getAccessTokenSilently, getIdTokenClaims, error]);
 
   if (error) {
     return (

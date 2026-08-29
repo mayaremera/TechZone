@@ -4,8 +4,8 @@ import { Heart, ShoppingCart, Check, ArrowRight } from "lucide-react";
 import { useCart } from "../../Components/CartContext/CartContext";
 import { useAuth0 } from "@auth0/auth0-react";
 import airpod from "../../assets/airpod.png";
+import { API_URL } from "../../config";
 
-const API_URL = "http://localhost:8080";
 
 const Toast = ({ message, product, onClose, type }) => (
   <div

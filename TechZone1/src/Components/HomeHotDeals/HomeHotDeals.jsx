@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import deal1 from "../../assets/hotdeal1.png";
 import deal2 from "../../assets/hotdeal2.png";
 import { useNavigate } from "react-router-dom";
+import { API_URL } from "../../config";
 
 export default function HomeHotDeals() {
   const [dealProducts, setDealProducts] = useState([
@@ -24,12 +25,12 @@ export default function HomeHotDeals() {
     const fetchHotDeals = async () => {
       try {
         // Fetch product with ID 47
-        const response47 = await fetch("http://localhost:8080/product/47");
+        const response47 = await fetch(`${API_URL}/product/47`);
         if (!response47.ok) throw new Error("Failed to fetch product 47");
         const product47 = await response47.json();
 
         // Fetch product with ID 28
-        const response28 = await fetch("http://localhost:8080/product/28");
+        const response28 = await fetch(`${API_URL}/product/28`);
         if (!response28.ok) throw new Error("Failed to fetch product 28");
         const product28 = await response28.json();
 

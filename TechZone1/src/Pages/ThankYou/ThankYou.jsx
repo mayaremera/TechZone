@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Check, Clock } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
+import { API_URL } from "../../config";
 
-const API_URL = "http://localhost:8080";
 
 export default function ThankYou() {
   const [showHistory, setShowHistory] = useState(false);

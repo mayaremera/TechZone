@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Search } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { API_URL } from "../../config";
 
 const SearchBar = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -15,7 +16,7 @@ const SearchBar = () => {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await fetch("http://localhost:8080/products");
+        const response = await fetch(`${API_URL}/products`);
         if (!response.ok) {
           throw new Error("Failed to fetch products");
         }

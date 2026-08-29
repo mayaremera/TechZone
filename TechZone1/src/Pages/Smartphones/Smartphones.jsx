@@ -3,6 +3,7 @@ import { Heart, ShoppingCart, Filter, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../../Components/CartContext/CartContext";
 import { useAuth0 } from "@auth0/auth0-react";
+import { API_URL } from "../../config";
 
 // Toast Component (unchanged)
 const Toast = ({ message, product, onClose, type }) => (
@@ -66,7 +67,7 @@ export default function Smartphones() {
         if (isAuthenticated) {
           token = await getAccessTokenSilently();
         }
-        const response = await fetch("http://localhost:8080/categories/3", {
+        const response = await fetch(`${API_URL}/categories/3`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -111,7 +112,7 @@ export default function Smartphones() {
       try {
         const token = await getAccessTokenSilently();
         const userSub = user.sub;
-        const response = await fetch(`http://localhost:8080/wishlist/${userSub}`, {
+        const response = await fetch(`${API_URL}/wishlist/${userSub}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -168,7 +169,7 @@ export default function Smartphones() {
       const userSub = user.sub;
       const isCurrentlyInWishlist = isInWishlist(product.product_id);
       const method = isCurrentlyInWishlist ? "DELETE" : "POST";
-      const response = await fetch(`http://localhost:8080/wishlist/${userSub}/${product.product_id}`, {
+      const response = await fetch(`${API_URL}/wishlist/${userSub}/${product.product_id}`, {
         method,
         headers: {
           Authorization: `Bearer ${token}`,

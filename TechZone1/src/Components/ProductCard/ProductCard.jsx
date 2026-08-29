@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Heart, ShoppingCart, CheckCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../../Components/CartContext/CartContext";
+import { API_URL } from "../../config";
 
 export default function ProductCard() {
   const [products, setProducts] = useState([]);
@@ -15,7 +16,7 @@ export default function ProductCard() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await fetch("http://localhost:8080/products");
+        const response = await fetch(`${API_URL}/products`);
         if (!response.ok) {
           throw new Error("Failed to fetch products");
         }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import "./App.css";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
@@ -22,45 +22,21 @@ import AboutUs from "./Pages/AboutUs/AboutUs";
 import Customersupport from "./Pages/Customersupport/Customersupport";
 import AdminDashboard from "./Pages/AdminDashboard/AdminDashboard";
 import { CartProvider } from "./Components/CartContext/CartContext";
+import { API_URL } from "./config";
+import { getAuthToken } from "./authToken";
 
-// Protected Route Component
+const AuthSyncContext = createContext({
+  isUserSynced: false,
+  syncedRole: null,
+});
+
 function Auth0ProtectedRoute({ element: Component, requiredRole = "customer" }) {
-  const { isAuthenticated, loginWithRedirect, isLoading, user, getAccessTokenSilently } = useAuth0();
-  const [role, setRole] = useState(null);
+  const { isAuthenticated, loginWithRedirect, isLoading } = useAuth0();
+  const { isUserSynced, syncedRole } = useContext(AuthSyncContext);
   const [authError, setAuthError] = useState(null);
+  const currentRole = (syncedRole || "").toLowerCase().trim();
 
-  useEffect(() => {
-    const fetchUserRole = async () => {
-      if (isAuthenticated && user) {
-        try {
-          const token = await getAccessTokenSilently({
-            authorizationParams: {
-              audience: "https://ecommerce-api",
-              scope: "openid profile email read:current_user offline_access read:users update:users",
-            },
-          });
-          const response = await fetch("http://localhost:8080/admin/users", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (response.status === 403) {
-            setRole("customer"); // Assume customer if access denied
-          } else if (response.ok) {
-            const users = await response.json();
-            const currentUser = users.find(u => u.email === user.email);
-            setRole(currentUser?.role || "customer");
-          } else {
-            throw new Error("Failed to fetch user role");
-          }
-        } catch (error) {
-          console.error("Error fetching user role:", error);
-          setRole("customer"); // Fallback to customer
-        }
-      }
-    };
-    if (isAuthenticated) fetchUserRole();
-  }, [isAuthenticated, user, getAccessTokenSilently]);
-
-  if (isLoading || (isAuthenticated && role === null && !authError)) {
+  if (isLoading || (isAuthenticated && !isUserSynced && !authError)) {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
@@ -69,27 +45,27 @@ function Auth0ProtectedRoute({ element: Component, requiredRole = "customer" }) 
   }
 
   if (!isAuthenticated) {
-    console.log("Not authenticated, initiating login...");
     loginWithRedirect({
       authorizationParams: {
         redirect_uri: window.location.origin,
         audience: "https://ecommerce-api",
-        scope: "openid profile email read:current_user offline_access read:users update:users",
+        scope: "openid profile email offline_access",
       },
       appState: { returnTo: window.location.pathname },
-    }).catch(err => {
+    }).catch((err) => {
       console.error("Login redirect failed:", err);
       setAuthError("Failed to initiate login. Please check Auth0 configuration.");
     });
     return null;
   }
 
-  if (role !== requiredRole && requiredRole === "admin") {
+  if (requiredRole === "admin" && currentRole !== "admin") {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="text-red-500 text-center">
           <p className="text-xl font-semibold">Access Denied</p>
           <p>You do not have admin privileges.</p>
+          <p className="mt-2 text-sm text-gray-600">Current role: {currentRole || "unknown"}</p>
           <button
             onClick={() => window.location.href = "/"}
             className="mt-4 px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600"
@@ -104,32 +80,72 @@ function Auth0ProtectedRoute({ element: Component, requiredRole = "customer" }) 
   return <Component />;
 }
 
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Layout />,
+    children: [
+      { index: true, element: <Home /> },
+      { path: "/shop", element: <Shop /> },
+      { path: "/laptops", element: <Laptops /> },
+      { path: "/gamingconsoles", element: <Gaming /> },
+      { path: "/smartphones", element: <Smartphones /> },
+      { path: "/wearablesaccessories", element: <WearablesAccessories /> },
+      { path: "/pccomponents", element: <PCComponents /> },
+      { path: "/sitemap", element: <Sitemap /> },
+      { path: "/product/:id", element: <ProductDetails /> },
+      { path: "/card", element: <ProductCard /> },
+      { path: "/cart", element: <Cart /> },
+      { path: "/aboutus", element: <AboutUs /> },
+      { path: "/customersupport", element: <Customersupport /> },
+      {
+        path: "/checkout",
+        element: <Auth0ProtectedRoute element={Checkout} />,
+      },
+      {
+        path: "/thankyou",
+        element: <Auth0ProtectedRoute element={ThankYou} />,
+      },
+      {
+        path: "/account",
+        element: <Auth0ProtectedRoute element={Account} />,
+      },
+      {
+        path: "/adminlogin",
+        element: <Auth0ProtectedRoute element={AdminDashboard} requiredRole="admin" />,
+      },
+      { path: "*", element: <ErrorPage /> },
+    ],
+  },
+]);
+
 export default function App() {
-  const { isAuthenticated, user, getAccessTokenSilently, isLoading, loginWithRedirect, error: authError } = useAuth0();
+  const { isAuthenticated, user, getAccessTokenSilently, getIdTokenClaims, isLoading, loginWithRedirect, error: authError } = useAuth0();
   const [isUserSynced, setIsUserSynced] = useState(false);
+  const [syncedRole, setSyncedRole] = useState(null);
   const [syncError, setSyncError] = useState(null);
   const [syncAttempts, setSyncAttempts] = useState(0);
   const maxAttempts = 3;
+  const currentSub = user?.sub || null;
+
+  useEffect(() => {
+    setIsUserSynced(false);
+    setSyncedRole(null);
+    setSyncAttempts(0);
+    setSyncError(null);
+  }, [currentSub]);
 
   const syncUserWithBackend = async (user) => {
     console.log("Starting syncUserWithBackend for user:", user.email);
     if (syncAttempts >= maxAttempts) {
       console.error("Max sync attempts reached:", syncAttempts);
-      setSyncError("Failed to sync user after multiple attempts. Please log in again.");
-      loginWithRedirect();
+      setSyncError("Failed to save this account in the database. Retry login.");
       return;
     }
 
     let token;
     try {
-      console.log("Fetching access token...");
-      token = await getAccessTokenSilently({
-        authorizationParams: {
-          audience: "https://ecommerce-api",
-          scope: "openid profile email read:current_user offline_access read:users update:users",
-        },
-      });
-      console.log("Access token obtained successfully:", token.substring(0, 10) + "..."); // Log first 10 chars for brevity
+      token = await getAuthToken({ getIdTokenClaims, getAccessTokenSilently });
     } catch (tokenError) {
       console.error("Token refresh failed:", tokenError);
       setSyncError("Failed to authenticate. Please try again.");
@@ -137,9 +153,15 @@ export default function App() {
       return;
     }
 
+    if (!token) {
+      setSyncError("No Auth0 token available to register this user.");
+      setSyncAttempts((prev) => prev + 1);
+      return;
+    }
+
     try {
       console.log("Sending POST request to /api/register-user...");
-      const response = await fetch("http://localhost:8080/api/register-user", {
+      const response = await fetch(`${API_URL}/api/register-user`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -148,22 +170,33 @@ export default function App() {
         body: JSON.stringify({
           user: {
             sub: user.sub,
-            email: user.email,
-            name: user.name || user.nickname || "Unknown",
+            email: user.email || user[`${import.meta.env.VITE_AUTH0_AUDIENCE}/email`],
+            name: user.name || user.nickname || user.email || "Unknown",
           },
         }),
       });
 
-      console.log("Response status:", response.status);
       const responseData = await response.json();
-      console.log("Response data:", responseData);
+      console.log("Register response:", response.status, responseData);
 
       if (!response.ok) {
-        console.error("Sync failed with response:", responseData);
         throw new Error(`Sync failed: ${responseData.message || "Unknown error"}`);
       }
 
-      console.log("User sync successful:", user.email);
+      let role = (responseData.role || "").toLowerCase().trim();
+      if (!role) {
+        const meResponse = await fetch(`${API_URL}/api/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (meResponse.ok) {
+          const me = await meResponse.json();
+          console.log("Me response:", me);
+          role = (me.role || "").toLowerCase().trim();
+        }
+      }
+
+      console.log("Resolved backend role:", role || "customer");
+      setSyncedRole(role || "customer");
       setIsUserSynced(true);
       setSyncAttempts(0);
       setSyncError(null);
@@ -175,57 +208,14 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (isAuthenticated && user && !isUserSynced && !isLoading) {
-      console.log("Triggering syncUserWithBackend...");
-      syncUserWithBackend(user);
-    } else {
-      console.log("Not triggering syncUserWithBackend. Conditions:", {
-        isAuthenticated,
-        user: !!user,
-        isUserSynced,
-        isLoading,
-      });
+    if (isAuthenticated && user && !isUserSynced && !isLoading && syncAttempts < maxAttempts) {
+      const timer = setTimeout(() => {
+        console.log("Triggering syncUserWithBackend...");
+        syncUserWithBackend(user);
+      }, syncAttempts === 0 ? 0 : 800);
+      return () => clearTimeout(timer);
     }
-  }, [isAuthenticated, user, isUserSynced, isLoading, getAccessTokenSilently]);
-
-  const router = createBrowserRouter([
-    {
-      path: "/",
-      element: <Layout />,
-      children: [
-        { index: true, element: <Home /> },
-        { path: "/shop", element: <Shop /> },
-        { path: "/laptops", element: <Laptops /> },
-        { path: "/gamingconsoles", element: <Gaming /> },
-        { path: "/smartphones", element: <Smartphones /> },
-        { path: "/wearablesaccessories", element: <WearablesAccessories /> },
-        { path: "/pccomponents", element: <PCComponents /> },
-        { path: "/sitemap", element: <Sitemap /> },
-        { path: "/product/:id", element: <ProductDetails /> },
-        { path: "/card", element: <ProductCard /> },
-        { path: "/cart", element: <Cart /> },
-        { path: "/aboutus", element: <AboutUs /> },
-        { path: "/customersupport", element: <Customersupport /> },
-        {
-          path: "/checkout",
-          element: <Auth0ProtectedRoute element={Checkout} />,
-        },
-        {
-          path: "/thankyou",
-          element: <Auth0ProtectedRoute element={ThankYou} />,
-        },
-        {
-          path: "/account",
-          element: <Auth0ProtectedRoute element={Account} />,
-        },
-        {
-          path: "/adminlogin",
-          element: <Auth0ProtectedRoute element={AdminDashboard} requiredRole="admin" />,
-        },
-        { path: "*", element: <ErrorPage /> },
-      ],
-    },
-  ]);
+  }, [isAuthenticated, user, isUserSynced, isLoading, syncAttempts, getAccessTokenSilently, getIdTokenClaims]);
 
   if (isLoading) {
     return (
@@ -274,8 +264,10 @@ export default function App() {
   }
 
   return (
-    <CartProvider>
-      <RouterProvider router={router} />
-    </CartProvider>
+    <AuthSyncContext.Provider value={{ isUserSynced, syncedRole }}>
+      <CartProvider>
+        <RouterProvider router={router} />
+      </CartProvider>
+    </AuthSyncContext.Provider>
   );
 }

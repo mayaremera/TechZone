@@ -4,16 +4,16 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
-from app import app, db, Category, Product, ProductImage
 
-
-JSON_PATH = (
+_BACKEND_JSON = Path(__file__).resolve().parent / "data" / "products.json"
+_FRONTEND_JSON = (
     Path(__file__).resolve().parent.parent
     / "TechZone1"
     / "src"
     / "data"
     / "products.json"
 )
+JSON_PATH = _BACKEND_JSON if _BACKEND_JSON.exists() else _FRONTEND_JSON
 
 
 def stock_to_quantity(stock_value):
@@ -27,6 +27,8 @@ def valid_image_url(url):
 
 
 def main():
+    from app import app, db, Category, Product, ProductImage
+
     if not JSON_PATH.exists():
         raise FileNotFoundError(f"Could not find products file: {JSON_PATH}")
 

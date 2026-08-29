@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight, Zap } from "lucide-react";
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
+import { API_URL } from "../../config";
 
-const API_URL = "http://localhost:8080";
 
 // Base64 encoded SVG background pattern remains unchanged
 const backgroundSvg = `

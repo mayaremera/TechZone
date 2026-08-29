@@ -20,6 +20,7 @@ import {
 import { useCart } from "../../Components/CartContext/CartContext";
 import { Link } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
+import { API_URL } from "../../config";
 
 // Toast notification component
 const Toast = ({ message, product, onClose, type }) => (
@@ -235,7 +236,7 @@ const ProductDetail = () => {
         if (isAuthenticated) {
           token = await getAccessTokenSilently();
         }
-        const response = await fetch(`http://localhost:8080/product/${id}`, {
+        const response = await fetch(`${API_URL}/product/${id}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -279,7 +280,7 @@ const ProductDetail = () => {
       try {
         const token = await getAccessTokenSilently();
         const userSub = user.sub;
-        const response = await fetch(`http://localhost:8080/wishlist/${userSub}`, {
+        const response = await fetch(`${API_URL}/wishlist/${userSub}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -306,7 +307,7 @@ const ProductDetail = () => {
           if (isAuthenticated) {
             token = await getAccessTokenSilently();
           }
-          const response = await fetch(`http://localhost:8080/categories/${product.category_id}`, {
+          const response = await fetch(`${API_URL}/categories/${product.category_id}`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -370,7 +371,7 @@ const ProductDetail = () => {
       const userSub = user.sub;
       const isCurrentlyInWishlist = isInWishlist(productId);
       const method = isCurrentlyInWishlist ? "DELETE" : "POST";
-      const response = await fetch(`http://localhost:8080/wishlist/${userSub}/${productId}`, {
+      const response = await fetch(`${API_URL}/wishlist/${userSub}/${productId}`, {
         method,
         headers: {
           Authorization: `Bearer ${token}`,

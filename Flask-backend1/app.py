@@ -18,20 +18,42 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 app = Flask(__name__)
 
-app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URI", "postgresql://postgres:TWF5YXlg@localhost/ecommerce_db")
+def normalize_database_uri(uri):
+    if not uri:
+        return uri
+    if uri.startswith("postgres://"):
+        uri = "postgresql://" + uri[len("postgres://"):]
+    if "sslmode=" not in uri and ("neon.tech" in uri or "render.com" in uri):
+        uri += ("&" if "?" in uri else "?") + "sslmode=require"
+    return uri
+
+app.config["SQLALCHEMY_DATABASE_URI"] = normalize_database_uri(
+    os.getenv("DATABASE_URI", "postgresql://postgres:TWF5YXlg@localhost/ecommerce_db")
+)
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "your-secret-key-here")
 
 AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN", "dev-maash7o71lvlk8iq.us.auth0.com")
 AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "https://ecommerce-api")
+AUTH0_CLIENT_ID = os.getenv("AUTH0_CLIENT_ID", "cUc52E47RmMk6xDFR624kcJFCVTujzL7")
 
 db = SQLAlchemy(app)
+FRONTEND_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "FRONTEND_ORIGIN",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173",
+    ).split(",")
+    if origin.strip()
+]
 CORS(app, resources={
-    r"/*": {"origins": "http://localhost:5173"}
+    r"/*": {"origins": FRONTEND_ORIGINS}
 }, supports_credentials=True)
+jwks_client = pyjwt.PyJWKClient(f"https://{AUTH0_DOMAIN}/.well-known/jwks.json")
 
-logging.basicConfig(level=logging.DEBUG)
-app.logger.setLevel(logging.DEBUG)
+IS_PRODUCTION = bool(os.getenv("RENDER") or os.getenv("FLASK_ENV") == "production")
+logging.basicConfig(level=logging.INFO if IS_PRODUCTION else logging.DEBUG)
+app.logger.setLevel(logging.INFO if IS_PRODUCTION else logging.DEBUG)
 
 # Models
 class Category(db.Model):
@@ -128,54 +150,84 @@ class Cart(db.Model):
     quantity = db.Column(db.Integer, nullable=False, default=1)
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
 
+def user_public_payload(user, message=None):
+    payload = {
+        "user_id": user.user_id,
+        "auth0_id": user.auth0_id,
+        "name": user.name,
+        "email": user.email,
+        "role": (user.role or "customer").strip().lower(),
+    }
+    if message:
+        payload["message"] = message
+    return payload
+
+
+def resolve_db_user(payload):
+    sub = payload.get("sub")
+    user = User.query.filter_by(auth0_id=sub).first() if sub else None
+    if user:
+        return user
+
+    email = payload.get("email") or payload.get(f"{AUTH0_AUDIENCE}/email")
+    if not email:
+        return None
+
+    user = User.query.filter_by(email=email.strip().lower()).first()
+    if user and sub and user.auth0_id != sub:
+        user.auth0_id = sub
+        db.session.commit()
+        app.logger.info("Linked %s to auth0_id %s", user.email, sub)
+    return user
+
+
+def _extract_bearer_token(header):
+    if not header:
+        return None
+    parts = header.split()
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1]
+    return None
+
+
 # Authentication Decorator
 def auth0_required(role=None):
     def decorator(f):
         @wraps(f)
         def decorated(*args, **kwargs):
-            token = request.headers.get('Authorization')
+            token = _extract_bearer_token(request.headers.get("Authorization"))
             if not token:
                 app.logger.error("No Authorization header provided")
                 return jsonify({"message": "Missing Authorization header"}), 401
             try:
-                token = token.split("Bearer ")[1]
-                jwks_url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
-                jwks = requests.get(jwks_url).json()
-                unverified_header = pyjwt.get_unverified_header(token)
-                rsa_key = next(key for key in jwks["keys"] if key["kid"] == unverified_header["kid"])
-                n_bytes = base64.urlsafe_b64decode(rsa_key["n"] + "==")
-                e_bytes = base64.urlsafe_b64decode(rsa_key["e"] + "==")
-                public_numbers = rsa.RSAPublicNumbers(
-                    e=int.from_bytes(e_bytes, "big"),
-                    n=int.from_bytes(n_bytes, "big")
-                )
-                public_key = public_numbers.public_key(default_backend())
-                pem = public_key.public_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo
-                )
+                signing_key = jwks_client.get_signing_key_from_jwt(token)
+                allowed_audiences = [aud for aud in (AUTH0_AUDIENCE, AUTH0_CLIENT_ID) if aud]
                 payload = pyjwt.decode(
                     token,
-                    pem,
+                    signing_key.key,
                     algorithms=["RS256"],
-                    audience=AUTH0_AUDIENCE,
-                    issuer=f"https://{AUTH0_DOMAIN}/"
+                    audience=allowed_audiences,
+                    issuer=f"https://{AUTH0_DOMAIN}/",
+                    leeway=30,
                 )
-                request.auth0_user = payload
-                request.current_user_payload = payload
-                user = User.query.filter_by(auth0_id=payload['sub']).first()
-                if role:
-                    if not user:
-                        app.logger.error(f"User not found for sub: {payload['sub']}")
-                        return jsonify({"message": "User not found"}), 404
-                    if user.role != role:
-                        app.logger.warning(f"Access denied for {user.email}: Requires {role}, has {user.role}")
-                        return jsonify({"message": f"Requires {role} privileges"}), 403
-                request.current_user = user
-                return f(*args, **kwargs)
             except Exception as e:
                 app.logger.error(f"Token validation failed: {str(e)}")
                 return jsonify({"message": f"Token validation failed: {str(e)}"}), 401
+
+            request.auth0_user = payload
+            request.current_user_payload = payload
+            user = resolve_db_user(payload)
+            if role:
+                if not user:
+                    app.logger.error(f"User not found for sub: {payload['sub']}")
+                    return jsonify({"message": "User not found"}), 404
+                if (user.role or "").strip().lower() != role:
+                    app.logger.warning(
+                        f"Access denied for {user.email}: Requires {role}, has {user.role}"
+                    )
+                    return jsonify({"message": f"Requires {role} privileges"}), 403
+            request.current_user = user
+            return f(*args, **kwargs)
         return decorated
     return decorator
 
@@ -271,35 +323,86 @@ def get_product(product_id):
 @auth0_required()
 def register_user():
     app.logger.info("Received request to /api/register-user")
-    user_data = request.get_json().get("user", {})
-    app.logger.debug(f"User data received: {user_data}")
-    auth0_id = user_data.get("sub")
-    email = user_data.get("email")
-    name = user_data.get("name", "Unknown")
-    if not auth0_id or not email:
-        app.logger.error("Missing required user data: auth0_id or email")
-        return jsonify({"message": "Missing required user data"}), 400
-    
-    payload = getattr(request, 'auth0_user', None) or request.current_user_payload
-    if not payload or 'sub' not in payload:
-        app.logger.error("Invalid or missing payload from token")
-        return jsonify({"message": "Invalid authentication data"}), 401
+    payload = getattr(request, "auth0_user", None) or {}
+    body = request.get_json(silent=True) or {}
+    user_data = body.get("user") or {}
 
-    auth0_id = payload['sub']
-    user = User.query.filter_by(auth0_id=auth0_id).first()
-    if not user:
-        try:
-            user = User(auth0_id=auth0_id, name=name, email=email, role="customer")
-            db.session.add(user)
+    auth0_id = payload.get("sub") or user_data.get("sub")
+    email = (
+        user_data.get("email")
+        or payload.get("email")
+        or payload.get(f"{AUTH0_AUDIENCE}/email")
+    )
+    if not email:
+        for key, value in payload.items():
+            if isinstance(key, str) and key.endswith("/email") and isinstance(value, str) and "@" in value:
+                email = value
+                break
+    name = (
+        user_data.get("name")
+        or payload.get("name")
+        or payload.get("nickname")
+        or user_data.get("nickname")
+        or (email.split("@")[0] if email else "Unknown")
+    )
+
+    if not auth0_id:
+        app.logger.error("Missing auth0 id in token")
+        return jsonify({"message": "Missing authentication data"}), 401
+    if not email:
+        app.logger.error("Missing email for Auth0 user %s", auth0_id)
+        return jsonify({"message": "Missing email on the Auth0 account"}), 400
+
+    email = email.strip().lower()
+    email_user = User.query.filter(db.func.lower(User.email) == email).first()
+    auth_user = User.query.filter_by(auth0_id=auth0_id).first()
+
+    if email_user and auth_user and email_user.user_id != auth_user.user_id:
+        if (auth_user.role or "").strip().lower() == "admin":
+            email_user.role = "admin"
+        db.session.delete(auth_user)
+        db.session.flush()
+        auth_user = None
+
+    user = email_user or auth_user
+    if user:
+        user.auth0_id = auth0_id
+        user.email = email
+        user.name = name
+        if (user.role or "").strip().lower() == "admin":
+            user.role = "admin"
+        db.session.commit()
+        app.logger.info(
+            "Synced user %s auth0_id=%s role=%s", email, auth0_id, user.role
+        )
+        return jsonify(user_public_payload(user, "User synced")), 200
+
+    try:
+        user = User(auth0_id=auth0_id, name=name, email=email, role="customer")
+        db.session.add(user)
+        db.session.commit()
+        app.logger.info("User created: %s with auth0_id: %s", email, auth0_id)
+        return jsonify(user_public_payload(user, "User created")), 201
+    except Exception as e:
+        db.session.rollback()
+        user = (
+            User.query.filter(db.func.lower(User.email) == email).first()
+            or User.query.filter_by(auth0_id=auth0_id).first()
+        )
+        if user:
+            user.auth0_id = auth0_id
             db.session.commit()
-            app.logger.info(f"User created: {email} with auth0_id: {auth0_id}")
-            return jsonify({"message": "User created", "user_id": user.user_id}), 201
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f"Failed to create user {email}: {str(e)}")
-            return jsonify({"message": f"Failed to create user: {str(e)}"}), 500
-    app.logger.info(f"User already exists: {email} with auth0_id: {auth0_id}")
-    return jsonify({"message": "User already exists", "user_id": user.user_id}), 200
+            return jsonify(user_public_payload(user, "User already exists")), 200
+        app.logger.error("Failed to create user %s: %s", email, str(e))
+        return jsonify({"message": f"Failed to create user: {str(e)}"}), 500
+
+@app.route("/api/me", methods=["GET"])
+@auth0_required()
+def get_current_user_profile():
+    user = request.current_user
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+    return jsonify(user_public_payload(user))
 
 @app.route("/wishlist/<user_sub>", methods=["GET"])
 @auth0_required()
@@ -963,64 +1066,42 @@ def admin_dashboard_page():
 def home():
     return jsonify({"message": "Welcome to the E-commerce API"})
 
-if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        max_product_id = db.session.query(db.func.max(Product.product_id)).scalar()
-        if db.engine.dialect.name == "postgresql" and max_product_id is not None:
-            db.session.execute(text(f"SELECT setval('products_product_id_seq', {max_product_id + 1})"))
-        
-        if not User.query.filter_by(role='admin').first():
-            admin_user = User(
-                auth0_id="admin|initial",
-                name="Admin User",
-                email="admin@example.com",
-                role="admin"
-            )
-            db.session.add(admin_user)
-            db.session.commit()
-            app.logger.info("Initial admin user created: admin@example.com")
-        
-        if not Category.query.first():
-            categories = [
-                Category(name="Laptops"),
-                Category(name="Gaming Consoles"),
-                Category(name="Smartphones"),
-                Category(name="Wearables & Accessories"),
-                Category(name="PC Components")
-            ]
-            db.session.bulk_save_objects(categories)
-            db.session.commit()
-            app.logger.info("Added test categories: %s", [c.name for c in categories])
-        
-        if not Product.query.first():
-            test_products = [
-                Product(name="Dell XPS 13", price=1199.99, description="Premium laptop", available_items=10, category_id=1),
-                Product(name="PlayStation 5", price=499.99, description="Next-gen console", available_items=5, category_id=2),
-                Product(name="iPhone 14", price=799.99, description="Latest iPhone", available_items=15, category_id=3),
-            ]
-            db.session.bulk_save_objects(test_products)
-            db.session.commit()
-            app.logger.info("Added test products with IDs: %s", [p.product_id for p in test_products])
-            
-            for product in test_products:
-                product_image = ProductImage(
-                    product_id=product.product_id,
-                    image_url="https://m.media-amazon.com/images/I/81PqGq8n2kL._AC_SX679_.jpg"  # Real image
-                )
-                db.session.add(product_image)
-            db.session.commit()
-            app.logger.info("Added test images for products")
-        
-        if not Wishlist.query.first():
-            user = User.query.first()
-            if user:
-                wishlist_items = [
-                    Wishlist(user_id=user.user_id, product_id=1),
-                    Wishlist(user_id=user.user_id, product_id=2),
-                ]
-                db.session.bulk_save_objects(wishlist_items)
-                db.session.commit()
-                app.logger.info("Added test wishlist items for user: %s", user.auth0_id)
-    
-    app.run(debug=True, port=8080)
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"}), 200
+
+def ensure_schema_and_seed():
+    db.create_all()
+
+    max_product_id = db.session.query(db.func.max(Product.product_id)).scalar()
+    if db.engine.dialect.name == "postgresql" and max_product_id is not None:
+        db.session.execute(
+            text("SELECT setval('products_product_id_seq', :next_id)"),
+            {"next_id": max_product_id + 1},
+        )
+        db.session.commit()
+
+    if not User.query.filter_by(role="admin").first():
+        admin_user = User(
+            auth0_id="admin|initial",
+            name="Admin User",
+            email="admin@example.com",
+            role="admin",
+        )
+        db.session.add(admin_user)
+        db.session.commit()
+        app.logger.info("Initial admin user created: admin@example.com")
+
+    if not Product.query.first():
+        from seed_from_json import main as seed_catalog
+
+        seed_catalog()
+        app.logger.info("Catalog seeded from products.json")
+
+with app.app_context():
+    ensure_schema_and_seed()
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8080))
+    debug = os.getenv("FLASK_DEBUG", "false" if IS_PRODUCTION else "true").lower() == "true"
+    app.run(host="0.0.0.0", port=port, debug=debug)

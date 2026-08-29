@@ -8,14 +8,15 @@ flask-cors==5.0.1
 Flask-JWT-Extended==4.7.1
 Flask-SQLAlchemy==3.1.1
 greenlet==3.1.1
+gunicorn==23.0.0
 itsdangerous==2.2.0
 Jinja2==3.1.6
 MarkupSafe==3.0.2
-psycopg2==2.9.10
 psycopg2-binary==2.9.10
 pycparser==2.22
 PyJWT==2.10.1
 python-dotenv==1.0.1
+requests==2.32.3
 SQLAlchemy==2.0.38
 typing_extensions==4.12.2
 Werkzeug==3.1.3

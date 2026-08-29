@@ -18,8 +18,8 @@ import { useCart } from "../../Components/CartContext/CartContext";
 import { useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
+import { API_URL } from "../../config";
 
-const API_URL = "http://localhost:8080";
 
 export default function Account() {
   const [activeTab, setActiveTab] = useState("Dashboard");

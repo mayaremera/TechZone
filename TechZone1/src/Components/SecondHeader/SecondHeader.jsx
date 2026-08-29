@@ -216,14 +216,6 @@ export default function EyeCatchingHeader() {
                     }`}
                     style={{ backgroundColor: category.color }}
                   />
-                  {({ isActive }) =>
-                    isActive && (
-                      <span
-                        className="absolute bottom-0 left-0 w-full h-1"
-                        style={{ backgroundColor: category.color }}
-                      />
-                    )
-                  }
                   {hoveredIndex === index && (
                     <span
                       className="absolute inset-0 opacity-20 rounded-full blur-xl transition-opacity duration-300"

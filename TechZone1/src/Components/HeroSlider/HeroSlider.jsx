@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ChevronRight, ChevronLeft, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { API_URL } from "../../config";
 
 const XboxSlider = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -76,7 +77,7 @@ const XboxSlider = () => {
     const fetchProducts = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch("http://localhost:8080/products");
+        const response = await fetch(`${API_URL}/products`);
         if (!response.ok) throw new Error("Failed to fetch products");
         const data = await response.json();
         setProducts(data);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation, useParams } from 'react-router-dom';
 import { FcGoogle } from 'react-icons/fc';
+import { API_URL } from "../../config";
 
 const Auth = () => {
     const navigate = useNavigate();
@@ -55,16 +56,16 @@ const Auth = () => {
                 if (!formData.displayName.trim()) {
                     throw new Error('Display name cannot be empty');
                 }
-                url = 'http://localhost:8080/signup';
+                url = `${API_URL}/signup`;
                 body = { name: formData.displayName, email: formData.email, password: formData.password };
             } else if (mode === 'login') {
-                url = 'http://localhost:8080/login';
+                url = `${API_URL}/login`;
                 body = { email: formData.email, password: formData.password };
             } else if (mode === 'forgot-password') {
-                url = 'http://localhost:8080/forgot_password';
+                url = `${API_URL}/forgot_password`;
                 body = { email: formData.email };
             } else if (mode === 'reset-password') {
-                url = `http://localhost:8080/reset_password/${token}`;
+                url = `${API_URL}/reset_password/${token}`;
                 body = { password: formData.newPassword };
             }
 
